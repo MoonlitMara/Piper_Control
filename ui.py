@@ -1,9 +1,9 @@
 import gi
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk, Pango
+from gi.repository import Gtk, Pango, Gdk
 
 import threading
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List
 
 from engine import PiperEngine
 from settings import load_settings, save_settings
@@ -27,21 +27,26 @@ class PiperUI(Gtk.Application):
     def do_activate(self) -> None:
         self.window = Gtk.ApplicationWindow(application=self)
         self.window.set_title("Piper TTS Control")
-        self.window.set_default_size(700, 720)
+        self.window.set_default_size(720, 740)
 
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
-        main_box.set_margin_top(20)
-        main_box.set_margin_bottom(20)
-        main_box.set_margin_start(20)
-        main_box.set_margin_end(20)
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        main_box.set_margin_top(24)
+        main_box.set_margin_bottom(24)
+        main_box.set_margin_start(24)
+        main_box.set_margin_end(24)
 
-        # ── Text input ───────────────────────────────────────────────────
+        # Text area
         scroll = Gtk.ScrolledWindow(vexpand=True)
         self.text_view = Gtk.TextView(wrap_mode=Gtk.WrapMode.WORD_CHAR)
         scroll.set_child(self.text_view)
         main_box.append(scroll)
 
-        # ── Audio Settings expander ─────────────────────────────────────
+        # Enter key to speak
+        key_ctrl = Gtk.EventControllerKey()
+        key_ctrl.connect("key-pressed", self.on_textview_key_pressed)
+        self.text_view.add_controller(key_ctrl)
+
+        # Audio Settings expander
         audio_exp = Gtk.Expander(label="Audio Settings", expanded=False)
         audio_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         audio_box.set_margin_top(12)
@@ -49,12 +54,10 @@ class PiperUI(Gtk.Application):
         audio_box.set_margin_start(16)
         audio_box.set_margin_end(16)
 
-        # Voice dropdown
-        voices = list_voices() or ["No voices found"]
+        voices = list_voices() or ["No voices available"]
         self.voice_combo = self._create_dropdown(voices, "voice")
         audio_box.append(self._labeled_row("Voice:", self.voice_combo))
 
-        # Output device dropdown
         sinks = list_audio_sinks()
         display_names, self.sink_map = self._build_device_list(sinks)
         self.device_combo = self._create_dropdown(display_names, "output_device")
@@ -69,7 +72,7 @@ class PiperUI(Gtk.Application):
         audio_exp.set_child(audio_box)
         main_box.append(audio_exp)
 
-        # ── History & Favorites expander ────────────────────────────────
+        # History & Favorites expander
         hist_exp = Gtk.Expander(label="History & Favorites", expanded=False)
         hist_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         hist_box.set_margin_top(12)
@@ -77,44 +80,42 @@ class PiperUI(Gtk.Application):
         hist_box.set_margin_start(16)
         hist_box.set_margin_end(16)
 
-        # Recent
         hist_box.append(Gtk.Label(label="Recent messages", xalign=0.0))
         self.recent_list = Gtk.ListBox()
         self.recent_list.set_selection_mode(Gtk.SelectionMode.NONE)
         recent_scroll = Gtk.ScrolledWindow()
         recent_scroll.set_child(self.recent_list)
-        recent_scroll.set_max_content_height(140)
+        recent_scroll.set_max_content_height(160)
         hist_box.append(recent_scroll)
         self._refresh_recent()
 
         hist_box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
 
-        # Favorites
         hist_box.append(Gtk.Label(label="Favorites", xalign=0.0))
         self.fav_list = Gtk.ListBox()
         self.fav_list.set_selection_mode(Gtk.SelectionMode.NONE)
         fav_scroll = Gtk.ScrolledWindow()
         fav_scroll.set_child(self.fav_list)
-        fav_scroll.set_max_content_height(140)
+        fav_scroll.set_max_content_height(160)
         hist_box.append(fav_scroll)
         self._refresh_favorites()
 
         hist_exp.set_child(hist_box)
         main_box.append(hist_exp)
 
-        # ── Buttons ─────────────────────────────────────────────────────
+        # Action buttons
         btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
         btn_box.set_halign(Gtk.Align.CENTER)
-        btn_box.set_margin_top(12)
+        btn_box.set_margin_top(16)
 
-        speak = Gtk.Button(label="Speak")
-        speak.connect("clicked", self.on_speak)
+        speak_btn = Gtk.Button(label="Speak")
+        speak_btn.connect("clicked", self.on_speak)
 
-        stop = Gtk.Button(label="Stop")
-        stop.connect("clicked", lambda b: self.engine.stop())
+        stop_btn = Gtk.Button(label="Stop")
+        stop_btn.connect("clicked", lambda b: self.engine.stop())
 
-        clear = Gtk.Button(label="Clear")
-        clear.connect("clicked", lambda b: self.text_view.get_buffer().set_text(""))
+        clear_btn = Gtk.Button(label="Clear")
+        clear_btn.connect("clicked", lambda b: self.text_view.get_buffer().set_text(""))
 
         self.mute_btn = Gtk.ToggleButton(label="Mute")
         muted = self.settings.get("mute", False)
@@ -124,9 +125,9 @@ class PiperUI(Gtk.Application):
             self.mute_btn.set_label("Unmute")
             self.mute_btn.add_css_class("destructive-action")
 
-        btn_box.append(speak)
-        btn_box.append(stop)
-        btn_box.append(clear)
+        btn_box.append(speak_btn)
+        btn_box.append(stop_btn)
+        btn_box.append(clear_btn)
         btn_box.append(self.mute_btn)
 
         main_box.append(btn_box)
@@ -135,7 +136,7 @@ class PiperUI(Gtk.Application):
         self.window.present()
 
     # ────────────────────────────────────────────────────────────────
-    #   Helpers
+    # Helpers
     # ────────────────────────────────────────────────────────────────
 
     def _labeled_row(self, text: str, widget: Gtk.Widget) -> Gtk.Box:
@@ -149,29 +150,33 @@ class PiperUI(Gtk.Application):
 
     def _create_dropdown(self, items: List[str], key: str) -> Gtk.DropDown:
         model = Gtk.StringList()
-        for i in items:
-            model.append(i)
+        for item in items:
+            model.append(item)
 
         dd = Gtk.DropDown(model=model)
         dd.set_factory(self._create_ellipsizing_factory())
 
         saved = self.settings.get(key)
         if saved in items:
-            dd.set_selected(items.index(saved))
+            try:
+                dd.set_selected(items.index(saved))
+            except ValueError:
+                dd.set_selected(0)
         else:
             dd.set_selected(0)
+
         return dd
 
     def _create_ellipsizing_factory(self) -> Gtk.SignalListItemFactory:
         factory = Gtk.SignalListItemFactory()
 
-        def setup(f, item):
+        def setup(_, item):
             lbl = Gtk.Label(xalign=0.0)
             lbl.set_ellipsize(Pango.EllipsizeMode.END)
             lbl.set_width_chars(45)
             item.set_child(lbl)
 
-        def bind(f, item):
+        def bind(_, item):
             lbl = item.get_child()
             lbl.set_text(item.get_item().get_string())
 
@@ -179,7 +184,7 @@ class PiperUI(Gtk.Application):
         factory.connect("bind", bind)
         return factory
 
-    def _build_device_list(self, sinks: List[str]) -> Tuple[List[str], Dict[str, str]]:
+    def _build_device_list(self, sinks: List[str]) -> tuple[list[str], dict[str, str]]:
         displays = []
         mapping = {}
 
@@ -189,18 +194,18 @@ class PiperUI(Gtk.Application):
 
             display = name
             if name == "default":
-                display = "Default"
+                display = "System Default"
             elif "analog-stereo" in name.lower():
                 display = "Analog Stereo"
             elif "easyeffects" in name.lower():
                 display = "EasyEffects"
             elif "virtual" in name.lower():
-                display = "Virtual"
+                display = "Virtual Output"
             else:
                 if '.' in name:
                     display = name.split('.')[-1].replace('_', ' ').replace('-', ' ').title()
-                if len(display) > 38:
-                    display = display[:35] + "…"
+                if len(display) > 40:
+                    display = display[:37] + "…"
 
             base = display
             i = 1
@@ -217,12 +222,12 @@ class PiperUI(Gtk.Application):
 
         return displays, mapping
 
-    def _add_slider(self, parent: Gtk.Box, lbl: str, key: str,
+    def _add_slider(self, parent: Gtk.Box, label: str, key: str,
                     minv: float, maxv: float, step: float):
         row = Gtk.Box(spacing=12)
-        label = Gtk.Label(label=lbl, xalign=0.0)
-        label.set_width_chars(14)
-        row.append(label)
+        lbl = Gtk.Label(label=label, xalign=0.0)
+        lbl.set_width_chars(14)
+        row.append(lbl)
 
         val_lbl = Gtk.Label(label=f"{self.settings.get(key, 1.0):.2f}")
         row.append(val_lbl)
@@ -231,76 +236,71 @@ class PiperUI(Gtk.Application):
         slider.set_value(self.settings.get(key, 1.0))
         slider.set_draw_value(False)
         slider.set_hexpand(True)
-        slider.set_size_request(180, -1)
+        slider.set_size_request(200, -1)
         row.append(slider)
 
         parent.append(row)
 
-        def changed(s, *_):
+        def on_change(s, *_):
             v = s.get_value()
             val_lbl.set_text(f"{v:.2f}")
             self.settings[key] = round(v, 3)
             save_settings(self.settings)
 
-        slider.connect("value-changed", changed)
-
-    # ────────────────────────────────────────────────────────────────
-    #   History & Favorites
-    # ────────────────────────────────────────────────────────────────
+        slider.connect("value-changed", on_change)
 
     def _refresh_recent(self):
-        while c := self.recent_list.get_first_child():
-            self.recent_list.remove(c)
+        while child := self.recent_list.get_first_child():
+            self.recent_list.remove(child)
 
         for text in self.history:
-            self._append_history_row(self.recent_list, text, favorite=False)
+            self._add_history_row(self.recent_list, text, favorite=False)
 
     def _refresh_favorites(self):
-        while c := self.fav_list.get_first_child():
-            self.fav_list.remove(c)
+        while child := self.fav_list.get_first_child():
+            self.fav_list.remove(child)
 
         for text in self.favorites:
-            self._append_history_row(self.fav_list, text, favorite=True)
+            self._add_history_row(self.fav_list, text, favorite=True)
 
-    def _append_history_row(self, listbox: Gtk.ListBox, text: str, favorite: bool):
+    def _add_history_row(self, listbox: Gtk.ListBox, text: str, favorite: bool):
         row = Gtk.ListBoxRow()
         box = Gtk.Box(spacing=8)
         box.set_margin_top(4)
         box.set_margin_bottom(4)
-        box.set_margin_start(6)
-        box.set_margin_end(6)
+        box.set_margin_start(8)
+        box.set_margin_end(8)
 
-        preview = (text[:68] + "…") if len(text) > 68 else text
-        lbl = Gtk.Label(label=preview, ellipsize=Pango.EllipsizeMode.END)
-        lbl.set_xalign(0.0)
+        preview = text[:70] + ("…" if len(text) > 70 else "")
+        lbl = Gtk.Label(label=preview, ellipsize=Pango.EllipsizeMode.END, xalign=0.0)
         lbl.set_hexpand(True)
         box.append(lbl)
 
-        use = Gtk.Button(label="Use")
-        use.connect("clicked", lambda _, t=text: self.text_view.get_buffer().set_text(t))
-        box.append(use)
+        use_btn = Gtk.Button(label="Use")
+        use_btn.connect("clicked", lambda _, t=text: self.text_view.get_buffer().set_text(t))
+        box.append(use_btn)
 
         if not favorite:
-            star = Gtk.Button(label="★")
-            star.connect("clicked", lambda _, t=text: self._add_to_fav(t))
-            box.append(star)
+            star_btn = Gtk.Button(label="★")
+            star_btn.connect("clicked", lambda _, t=text: self._add_favorite(t))
+            box.append(star_btn)
         else:
-            delete = Gtk.Button(label="Delete")
-            delete.add_css_class("destructive-action")
-            delete.connect("clicked", lambda _, t=text: self._remove_from_fav(t))
-            box.append(delete)
+            del_btn = Gtk.Button(label="Delete")
+            del_btn.add_css_class("destructive-action")
+            del_btn.connect("clicked", lambda _, t=text: self._remove_favorite(t))
+            box.append(del_btn)
 
         row.set_child(box)
         listbox.append(row)
 
-    def _add_to_fav(self, text: str):
+    def _add_favorite(self, text: str):
         if text and text not in self.favorites:
             self.favorites.insert(0, text)
             self.settings["favorites"] = self.favorites
             save_settings(self.settings)
             self._refresh_favorites()
 
-    def _remove_from_fav(self, text: str):
+    def _remove_favorite(self, text: str):
         if text in self.favorites:
             self.favorites.remove(text)
             self.settings["favorites"] = self.favorites
@@ -308,7 +308,7 @@ class PiperUI(Gtk.Application):
             self._refresh_favorites()
 
     # ────────────────────────────────────────────────────────────────
-    #   Actions
+    # Actions
     # ────────────────────────────────────────────────────────────────
 
     def on_speak(self, button):
@@ -319,22 +319,22 @@ class PiperUI(Gtk.Application):
             return
 
         # Voice
-        idx = self.voice_combo.get_selected()
+        pos = self.voice_combo.get_selected()
         voices = list_voices() or ["en_GB-cori-high"]
-        voice = voices[idx] if idx < len(voices) else voices[0]
+        voice = voices[pos] if pos < len(voices) else voices[0]
         self.settings["voice"] = voice
 
         # Device
-        idx = self.device_combo.get_selected()
         device = "default"
-        if idx != Gtk.INVALID_LIST_POSITION and self.sink_map:
-            disp = self.device_combo.get_selected_item().get_string()
-            device = self.sink_map.get(disp, "default")
+        pos = self.device_combo.get_selected()
+        if pos != Gtk.INVALID_LIST_POSITION and self.sink_map:
+            display = self.device_combo.get_selected_item().get_string()
+            device = self.sink_map.get(display, "default")
         self.settings["output_device"] = device
 
         save_settings(self.settings)
 
-        # Add to history
+        # Update history
         if text in self.history:
             self.history.remove(text)
         self.history.insert(0, text)
@@ -343,6 +343,7 @@ class PiperUI(Gtk.Application):
         save_settings(self.settings)
         self._refresh_recent()
 
+        # Speak
         if self.tts_thread and self.tts_thread.is_alive():
             return
 
@@ -353,18 +354,26 @@ class PiperUI(Gtk.Application):
         )
         self.tts_thread.start()
 
-    def on_mute_toggled(self, btn: Gtk.ToggleButton):
-        muted = btn.get_active()
+    def on_mute_toggled(self, button: Gtk.ToggleButton):
+        muted = button.get_active()
         self.engine.set_mute(muted)
         self.settings["mute"] = muted
         save_settings(self.settings)
 
         if muted:
-            btn.set_label("Unmute")
-            btn.add_css_class("destructive-action")
+            button.set_label("Unmute")
+            button.add_css_class("destructive-action")
         else:
-            btn.set_label("Mute")
-            btn.remove_css_class("destructive-action")
+            button.set_label("Mute")
+            button.remove_css_class("destructive-action")
+
+    def on_textview_key_pressed(self, controller, keyval, keycode, state):
+        if keyval == Gdk.KEY_Return:
+            if state & Gdk.ModifierType.SHIFT_MASK:
+                return False  # normal newline
+            self.on_speak(None)
+            return True
+        return False
 
 
 def main():
