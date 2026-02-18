@@ -53,20 +53,7 @@ Voice models
 ------------
 Place .onnx and .onnx.json files into the voices/ folder.
 
-Example folder structure:
-
-piper-control-portable/
-├── voices/
-│   ├── en_US-lessac-medium.onnx
-│   ├── en_US-lessac-medium.onnx.json
-│   ├── pt_BR-faber-medium.onnx
-│   └── pt_BR-faber-medium.onnx.json
-├── main.py
-├── ui.py
-├── engine.py
-├── settings.py
-├── utils.py
-└── config.json           ← created automatically when you change something
+https://rhasspy.github.io/piper-samples/
 
 Basic usage
 -----------
