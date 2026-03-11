@@ -16,11 +16,8 @@ class PiperUI(Gtk.Application):
         self.settings: Dict[str, Any] = load_settings()
         self.engine = PiperEngine()
         self.tts_thread: threading.Thread | None = None
-
-        # display_name → real sink name
         self.sink_map: Dict[str, str] = {}
 
-        # History & Favorites
         self.history: List[str] = self.settings.get("history", [])[:10]
         self.favorites: List[str] = self.settings.get("favorites", [])
 
@@ -35,18 +32,15 @@ class PiperUI(Gtk.Application):
         main_box.set_margin_start(24)
         main_box.set_margin_end(24)
 
-        # Text area
         scroll = Gtk.ScrolledWindow(vexpand=True)
         self.text_view = Gtk.TextView(wrap_mode=Gtk.WrapMode.WORD_CHAR)
         scroll.set_child(self.text_view)
         main_box.append(scroll)
 
-        # Enter key to speak
         key_ctrl = Gtk.EventControllerKey()
         key_ctrl.connect("key-pressed", self.on_textview_key_pressed)
         self.text_view.add_controller(key_ctrl)
 
-        # Audio Settings expander
         audio_exp = Gtk.Expander(label="Audio Settings", expanded=False)
         audio_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         audio_box.set_margin_top(12)
@@ -65,14 +59,13 @@ class PiperUI(Gtk.Application):
 
         audio_box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
 
-        self._add_slider(audio_box, "Speed",  "speed",  0.7, 1.5, 0.05)
-        self._add_slider(audio_box, "Noise",  "noise",  0.0, 1.0,  0.05)
-        self._add_slider(audio_box, "Volume", "volume", 0.0, 2.0,  0.05)
+        self._add_slider(audio_box, "Speed", "speed", 0.7, 1.5, 0.05)
+        self._add_slider(audio_box, "Noise", "noise", 0.0, 1.0, 0.05)
+        self._add_slider(audio_box, "Volume", "volume", 0.0, 2.0, 0.05)
 
         audio_exp.set_child(audio_box)
         main_box.append(audio_exp)
 
-        # History & Favorites expander
         hist_exp = Gtk.Expander(label="History & Favorites", expanded=False)
         hist_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         hist_box.set_margin_top(12)
@@ -103,7 +96,6 @@ class PiperUI(Gtk.Application):
         hist_exp.set_child(hist_box)
         main_box.append(hist_exp)
 
-        # Action buttons
         btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
         btn_box.set_halign(Gtk.Align.CENTER)
         btn_box.set_margin_top(16)
@@ -134,10 +126,6 @@ class PiperUI(Gtk.Application):
 
         self.window.set_child(main_box)
         self.window.present()
-
-    # ────────────────────────────────────────────────────────────────
-    # Helpers
-    # ────────────────────────────────────────────────────────────────
 
     def _labeled_row(self, text: str, widget: Gtk.Widget) -> Gtk.Box:
         box = Gtk.Box(spacing=12)
@@ -307,10 +295,6 @@ class PiperUI(Gtk.Application):
             save_settings(self.settings)
             self._refresh_favorites()
 
-    # ────────────────────────────────────────────────────────────────
-    # Actions
-    # ────────────────────────────────────────────────────────────────
-
     def on_speak(self, button):
         buf = self.text_view.get_buffer()
         start, end = buf.get_bounds()
@@ -318,13 +302,11 @@ class PiperUI(Gtk.Application):
         if not text:
             return
 
-        # Voice
         pos = self.voice_combo.get_selected()
         voices = list_voices() or ["en_GB-cori-high"]
         voice = voices[pos] if pos < len(voices) else voices[0]
         self.settings["voice"] = voice
 
-        # Device
         device = "default"
         pos = self.device_combo.get_selected()
         if pos != Gtk.INVALID_LIST_POSITION and self.sink_map:
@@ -334,7 +316,6 @@ class PiperUI(Gtk.Application):
 
         save_settings(self.settings)
 
-        # Update history
         if text in self.history:
             self.history.remove(text)
         self.history.insert(0, text)
@@ -343,7 +324,6 @@ class PiperUI(Gtk.Application):
         save_settings(self.settings)
         self._refresh_recent()
 
-        # Speak
         if self.tts_thread and self.tts_thread.is_alive():
             return
 
@@ -370,7 +350,7 @@ class PiperUI(Gtk.Application):
     def on_textview_key_pressed(self, controller, keyval, keycode, state):
         if keyval == Gdk.KEY_Return:
             if state & Gdk.ModifierType.SHIFT_MASK:
-                return False  # normal newline
+                return False
             self.on_speak(None)
             return True
         return False
