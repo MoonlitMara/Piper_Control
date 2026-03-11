@@ -35,8 +35,11 @@ Software you need (usually already present on most Linux distributions):
 • Linux with PipeWire or PulseAudio
 • Python 3.8 or newer
 • PyGObject + GTK 4
+  
   Ubuntu/Debian:    sudo apt install python3-gi python3-gi-cairo gir1.2-gtk-4.0
+  
   Fedora:           sudo dnf install python3-gobject gtk4
+  
   Arch:             sudo pacman -S python-gobject gtk4
 
 • piper-tts binary in your $PATH
@@ -102,11 +105,16 @@ All changes are saved instantly to config.json.
 Troubleshooting quick list
 --------------------------
 No voices shown           → No .onnx files in voices/ folder
+
 No sound                  → Check selected device, mute status, pw-play/paplay working?
+
 Volume slider ineffective → Install sox package
+
 Long device names ugly    → Should be ellipsized (GTK theme issue?)
+
 History/Favorites gone    → config.json deleted or corrupted
+
 App won't start           → Missing PyGObject / GTK4 packages
 
 Enjoy your portable TTS control!
-kinoko – Nova Friburgo, RJ – 2026
+Moonlit Mara 2026
